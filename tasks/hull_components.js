@@ -14,6 +14,10 @@ var Handlebars  = require('handlebars');
 var UglifyJS    = require('uglify-js');
 var gitRev      = require('git-rev');
 
+Handlebars.registerHelper('json', function(obj) {
+  return JSON.stringify(obj);
+});
+
 module.exports = function(grunt) {
 
   function Component(mainFile, source, dest, options) {
@@ -56,11 +60,17 @@ module.exports = function(grunt) {
       file.src.forEach(function(source) {
         var list = Component.list(source, dest, options);
         components = components.concat(list);
-        Component.buildPreviews(source, dest, { components: list, config: options.config, options: options });
+        var componentsWithConfig = {}; 
+        _.map(list, function(c) {
+          var cfg = {};
+          if (options.config.components && options.config.components[c.name]) {
+            cfg = options.config.components[c.name];
+          }
+          return componentsWithConfig[c.name] = _.extend({}, c, { config: cfg });
+        });
+        Component.buildPreviews(source, dest, { components: componentsWithConfig, config: options.config, options: options });
       });
-
       _.invoke(components, 'build');
-
     });
   };
 
