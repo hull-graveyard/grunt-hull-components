@@ -52,6 +52,7 @@ module.exports = function(grunt) {
   },
 
   Component.buildAll = function(files, options) {
+
     files.forEach(function(file) {
       // Concat specified files.
       var dest = file.dest || 'dist',
@@ -85,7 +86,6 @@ module.exports = function(grunt) {
 
     build: function() {
       _.each(this.buildTasks, function(fn) { 
-        console.warn("Build task: ", fn);
         this[fn].call(this); 
       }.bind(this));
     },
@@ -172,6 +172,7 @@ module.exports = function(grunt) {
 
   grunt.registerMultiTask('hull_components', 'A grunt task to build hull components.', function() {
     
+
     var done = this.async();
 
     var options = this.options({
@@ -199,11 +200,15 @@ module.exports = function(grunt) {
     
     gitRev.branch(function(branch) {
       if (['HEAD', 'master'].indexOf(branch) !== -1) {
-        git.tag(buildAll);
+        gitRev.tag(function(tag) {
+          buildAll(tag);
+          done();
+        });
       } else {
         buildAll(branch);
+        done();
       }
-      done();
+      
     });
 
   });
