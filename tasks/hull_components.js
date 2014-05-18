@@ -31,7 +31,7 @@ module.exports = function(grunt) {
       templates: this.listFiles(this.options.templates.extension),
       stylesheets: this.listFiles(this.options.stylesheets || 'css'),
       javascripts: this.listFiles('js')
-    }    
+    }
   };
 
   Component.list = function(source, dest, options) {
@@ -97,13 +97,20 @@ module.exports = function(grunt) {
       grunt.file.write(mainFile, minified.code);
       grunt.file.write(mainFile + '.map', minified.map);
 
-      // Copy vendor files
-      
+      // Build javascript vendor files
+      _.each(this.files.javascripts, function(file) {
+        if (file !== 'main.js') {
+          console.warn("Writing vendor: ",file);
+          var minified = UglifyJS.minify(path.join(self.basePath, file))
+          grunt.file.write(path.join(self.destPath, file), minified.code);
+          grunt.file.write(path.join(self.destPath, file) + '.map', minified.map);
+        }
+      });
     },
 
     writePkgFile: function() {
       var pkgFile = path.join(this.destPath, 'hull.json');
-      var pkg = _.extend(_.pick(this, 'name', 'version', 'templates', 'stylesheets', 'javascripts'), {
+      var pkg = _.extend(_.pick(this, 'name', 'version', 'files'), {
         buildDate: new Date()
       });
 
