@@ -42,7 +42,7 @@ grunt.initConfig({
 Type: `Boolean`
 Default value: `true`
 
-Minify build components
+Minify built components.
 
 ### Usage Examples
 
