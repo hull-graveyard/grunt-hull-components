@@ -16,9 +16,6 @@ var gitRev      = require('git-rev');
 
 module.exports = function(grunt) {
 
-  // Please see the Grunt documentation for more information regarding task
-  // creation: http://gruntjs.com/creating-tasks
-
   function Component(mainFile, source, dest, options) {
     this.main         = mainFile;
     this.version      = options.version;
@@ -28,9 +25,9 @@ module.exports = function(grunt) {
     this.destPath     = path.resolve(path.join(dest, this.name));
     this.options      = options;
     this.files        = {
-      templates: this.listFiles(this.options.templates.extension),
-      stylesheets: this.listFiles(this.options.stylesheets || 'css'),
-      javascripts: this.listFiles('js')
+      templates:    this.listFiles(this.options.templates.extension),
+      stylesheets:  this.listFiles(this.options.stylesheets.extension || 'css'),
+      javascripts:  this.listFiles('js')
     }
   };
 
@@ -62,25 +59,36 @@ module.exports = function(grunt) {
   Component.prototype = {
     listFiles: function(ext)  {
       var pattern = '**/**/*';
-      if (ext) {
-        pattern += '.' + ext;
-      }
+      if (ext) pattern += '.' + ext;
       return grunt.file.expand({ filter: 'isFile', cwd: this.basePath }, pattern);
     },
 
+
+    buildTasks: ['cleanDestPath', 'writePkgFile', 'buildMainFile', 'buildJsVendors', 'buildCssVendors'],
+
     build: function() {
-      var self = this;
+      _.each(this.buildTasks, function(fn) { 
+        console.warn("Build task: ", fn);
+        this[fn].call(this); 
+      }.bind(this));
+    },
+
+    cleanDestPath: function() {
       if (grunt.file.exists(this.destPath)) {
         grunt.file.delete(this.destPath);
-      }
-      
-      var basenames = function(names) { 
-        return _.map(names, function(n) { return n.replace(/\.[a-z0-9]+$/, ''); });
-      };
+      }    
+    },
 
-      // Write package file
-      this.writePkgFile();
+    writePkgFile: function() {
+      var pkgFile = path.join(this.destPath, 'hull.json');
+      var pkg = _.extend(_.pick(this, 'name', 'version', 'files'), {
+        buildDate: new Date()
+      });
 
+      return grunt.file.write(pkgFile, JSON.stringify(pkg, null, 2));
+    },
+
+    buildMainFile: function() {
       // Build source
       var source = [
         this.buildTemplates(),
@@ -97,31 +105,29 @@ module.exports = function(grunt) {
       grunt.file.write(mainFile, minified.code);
       grunt.file.write(mainFile + '.map', minified.map);
 
-      this.buildJsVendors();
     },
-
-    writePkgFile: function() {
-      var pkgFile = path.join(this.destPath, 'hull.json');
-      var pkg = _.extend(_.pick(this, 'name', 'version', 'files'), {
-        buildDate: new Date()
-      });
-
-      return grunt.file.write(pkgFile, JSON.stringify(pkg, null, 2));
-    },
-
 
     buildJsVendors: function() {
-      var destPath = this.destPath, 
+      var destPath = this.destPath,
           basePath = this.basePath;
       _.each(this.files.javascripts, function(file) {
         if (file !== 'main.js') {
-          console.warn("Writing vendor: ",file);
           var minified = UglifyJS.minify(path.join(basePath, file))
           grunt.file.write(path.join(destPath, file), minified.code);
           grunt.file.write(path.join(destPath, file) + '.map', minified.map);
         }
       });
     },
+
+    buildCssVendors: function() {
+      var destPath = this.destPath,
+          basePath = this.basePath;
+      _.each(this.files.stylesheets, function(file) {
+        grunt.file.write(path.join(destPath, file), grunt.file.read(path.join(basePath, file)));
+      });
+    },
+
+
 
     buildTemplates: function() {
       var self = this, ns = this.options.templates.namespace, ext = this.options.templates.extension;
@@ -159,7 +165,9 @@ module.exports = function(grunt) {
         wrapped: false,
         namespace: 'Hull.templates._default'
       },
-      stylesheets: 'css'
+      stylesheets: {
+        extension: 'css'
+      }
     });
 
     if (grunt.file.exists(this.data.dest)) {
