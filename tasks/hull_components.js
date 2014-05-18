@@ -82,18 +82,23 @@ module.exports = function(grunt) {
       return grunt.file.expand({ filter: 'isFile', cwd: this.basePath }, pattern);
     },
 
-    buildTasks: ['cleanDestPath', 'buildPkgFile', 'buildMainFile', 'buildJsVendors', 'buildCssVendors'],
+    buildTasks: ['buildPkgFile', 'buildMainFile', 'buildJsVendors', 'buildCssVendors'],
 
     build: function() {
-      _.each(this.buildTasks, function(fn) { 
-        this[fn].call(this); 
+      var start = new Date();
+      var title = "Building Component '" + this.name + "'";
+      grunt.log.subhead(title);
+      grunt.log.writeln(Array(title.length + 1).join('-'));
+      var prev = start;
+      _.each(this.buildTasks, function(fn) {
+        this[fn].call(this);
+        var t = new Date();
+        grunt.log.ok(fn.replace(/^build/, '') + " (" + (t - prev) + "ms)");
+        prev = t;
       }.bind(this));
-    },
-
-    cleanDestPath: function() {
-      if (grunt.file.exists(this.destPath)) {
-        grunt.file.delete(this.destPath);
-      }    
+      var t = new Date() - start;
+      grunt.log.ok("Done (total:" + t + "ms)");
+      grunt.log.writeln(Array(title.length + 1).join('-'));
     },
 
     buildPkgFile: function() {
@@ -117,10 +122,14 @@ module.exports = function(grunt) {
       var mainFile = this.destPath + '/main.js';
       grunt.file.write(mainDebugFile, source);
 
-      // Minify
-      var minified = UglifyJS.minify(mainDebugFile);
-      grunt.file.write(mainFile, minified.code);
-      grunt.file.write(mainFile + '.map', minified.map);
+      if (this.options.optimize) {
+        // Minify
+        var minified = UglifyJS.minify(mainDebugFile);
+        grunt.file.write(mainFile, minified.code);
+        grunt.file.write(mainFile + '.map', minified.map);        
+      } else {
+        grunt.file.write(mainFile, source);
+      }
 
     },
 
@@ -176,6 +185,7 @@ module.exports = function(grunt) {
     var done = this.async();
 
     var options = this.options({
+      optimize: true,
       templates: {
         extension: 'hbs',
         wrapped: false,
@@ -185,8 +195,12 @@ module.exports = function(grunt) {
         extension: 'css'
       }
     });
+    
+    var keepDests = grunt.config.get('hull_components.options.keepDests') || [];
 
-    if (grunt.file.exists(this.data.dest)) {
+    if (grunt.file.exists(this.data.dest) && !_.include(keepDests, this.data.dest)) {
+      keepDests.push(this.data.dest);
+      grunt.config.set('hull_components.options.keepDests', keepDests);
       grunt.file.delete(this.data.dest);
     }
 
@@ -208,10 +222,6 @@ module.exports = function(grunt) {
         buildAll(branch);
         done();
       }
-      
     });
-
   });
-    
-
 };
