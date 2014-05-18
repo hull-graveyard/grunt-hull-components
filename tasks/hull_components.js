@@ -56,7 +56,7 @@ module.exports = function(grunt) {
       file.src.forEach(function(source) {
         var list = Component.list(source, dest, options);
         components = components.concat(list);
-        Component.buildPreviews(source, dest, { components: list, config: options.config });
+        Component.buildPreviews(source, dest, { components: list, config: options.config, options: options });
       });
 
       _.invoke(components, 'build');
