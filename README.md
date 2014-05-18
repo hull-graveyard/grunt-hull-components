@@ -1,4 +1,4 @@
-# grunt-hull-components
+# grunt-hull-components (v0.1.0)
 
 > A grunt task to build hull components.
 
