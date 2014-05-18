@@ -97,15 +97,7 @@ module.exports = function(grunt) {
       grunt.file.write(mainFile, minified.code);
       grunt.file.write(mainFile + '.map', minified.map);
 
-      // Build javascript vendor files
-      _.each(this.files.javascripts, function(file) {
-        if (file !== 'main.js') {
-          console.warn("Writing vendor: ",file);
-          var minified = UglifyJS.minify(path.join(self.basePath, file))
-          grunt.file.write(path.join(self.destPath, file), minified.code);
-          grunt.file.write(path.join(self.destPath, file) + '.map', minified.map);
-        }
-      });
+      this.buildJsVendors();
     },
 
     writePkgFile: function() {
@@ -117,6 +109,19 @@ module.exports = function(grunt) {
       return grunt.file.write(pkgFile, JSON.stringify(pkg, null, 2));
     },
 
+
+    buildJsVendors: function() {
+      var destPath = this.destPath, 
+          basePath = this.basePath;
+      _.each(this.files.javascripts, function(file) {
+        if (file !== 'main.js') {
+          console.warn("Writing vendor: ",file);
+          var minified = UglifyJS.minify(path.join(basePath, file))
+          grunt.file.write(path.join(destPath, file), minified.code);
+          grunt.file.write(path.join(destPath, file) + '.map', minified.map);
+        }
+      });
+    },
 
     buildTemplates: function() {
       var self = this, ns = this.options.templates.namespace, ext = this.options.templates.extension;
