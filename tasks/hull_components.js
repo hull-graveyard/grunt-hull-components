@@ -33,11 +33,19 @@ module.exports = function(grunt) {
 
   Component.list = function(source, dest, options) {
     var components = [];
-    grunt.file.expand({ filter: 'isFile' }, source + '/**/**/main.js').forEach(function(main) {
+    grunt.file.expand({ filter: 'isFile' }, path.join(source, '/**/**/main.js')).forEach(function(main) {
       components.push(new Component(main, source, dest, options))
     });
     return components;
   };
+
+  Component.buildPreviews = function(source, dest, data) {
+    grunt.file.expand({ filter: 'isFile', cwd: source }, '*.html').forEach(function(file) {
+      data.initConfig = JSON.stringify(data.config.init);
+      var preview = Handlebars.compile(grunt.file.read(path.join(source, file)))(data);
+      grunt.file.write(path.join(dest, file), preview);
+    });
+  },
 
   Component.buildAll = function(files, options) {
     files.forEach(function(file) {
@@ -46,13 +54,13 @@ module.exports = function(grunt) {
           components = [];
 
       file.src.forEach(function(source) {
-        components = components.concat(Component.list(source, file.dest, options));
+        var list = Component.list(source, dest, options);
+        components = components.concat(list);
+        Component.buildPreviews(source, dest, { components: list, config: options.config });
       });
 
-      components.forEach(function(component) {
-        console.warn("Building component : ", component.name);
-        component.build();
-      });
+      _.invoke(components, 'build');
+
     });
   };
 
@@ -63,8 +71,7 @@ module.exports = function(grunt) {
       return grunt.file.expand({ filter: 'isFile', cwd: this.basePath }, pattern);
     },
 
-
-    buildTasks: ['cleanDestPath', 'writePkgFile', 'buildMainFile', 'buildJsVendors', 'buildCssVendors'],
+    buildTasks: ['cleanDestPath', 'buildPkgFile', 'buildMainFile', 'buildJsVendors', 'buildCssVendors'],
 
     build: function() {
       _.each(this.buildTasks, function(fn) { 
@@ -79,7 +86,7 @@ module.exports = function(grunt) {
       }    
     },
 
-    writePkgFile: function() {
+    buildPkgFile: function() {
       var pkgFile = path.join(this.destPath, 'hull.json');
       var pkg = _.extend(_.pick(this, 'name', 'version', 'files'), {
         buildDate: new Date()
@@ -126,8 +133,6 @@ module.exports = function(grunt) {
         grunt.file.write(path.join(destPath, file), grunt.file.read(path.join(basePath, file)));
       });
     },
-
-
 
     buildTemplates: function() {
       var self = this, ns = this.options.templates.namespace, ext = this.options.templates.extension;
@@ -182,7 +187,6 @@ module.exports = function(grunt) {
       Component.buildAll(files, options);
     }
     
-
     gitRev.branch(function(branch) {
       if (['HEAD', 'master'].indexOf(branch) !== -1) {
         git.tag(buildAll);
