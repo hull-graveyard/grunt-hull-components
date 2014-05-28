@@ -61,10 +61,10 @@ module.exports = function(grunt) {
       file.src.forEach(function(source) {
         var list = Component.list(source, dest, options);
         components = components.concat(list);
-        var componentsWithConfig = {}; 
+        var componentsWithConfig = {};
         _.map(list, function(c) {
           var cfg = {};
-          if (options.config.components && options.config.components[c.name]) {
+          if (options.config && options.config.components && options.config.components[c.name]) {
             cfg = options.config.components[c.name];
           }
           return componentsWithConfig[c.name] = _.extend({}, c, { config: cfg });
@@ -126,7 +126,7 @@ module.exports = function(grunt) {
         // Minify
         var minified = UglifyJS.minify(mainDebugFile);
         grunt.file.write(mainFile, minified.code);
-        grunt.file.write(mainFile + '.map', minified.map);        
+        grunt.file.write(mainFile + '.map', minified.map);
       } else {
         grunt.file.write(mainFile, source);
       }
@@ -156,7 +156,7 @@ module.exports = function(grunt) {
     buildTemplates: function() {
       var self = this, ns = this.options.templates.namespace, ext = this.options.templates.extension;
       var compiled = [], parts = ["this"];
-      
+
       // Initialize namespace
       _.map(ns.split("."), function(part) {
         parts.push(part);
@@ -180,7 +180,7 @@ module.exports = function(grunt) {
   }
 
   grunt.registerMultiTask('hull_components', 'A grunt task to build hull components.', function() {
-    
+
 
     var done = this.async();
 
@@ -195,7 +195,7 @@ module.exports = function(grunt) {
         extension: 'css'
       }
     });
-    
+
     var keepDests = grunt.config.get('hull_components.options.keepDests') || [];
 
     if (grunt.file.exists(this.data.dest) && !_.include(keepDests, this.data.dest)) {
@@ -211,7 +211,7 @@ module.exports = function(grunt) {
       options.version = version;
       Component.buildAll(files, options);
     }
-    
+
     gitRev.branch(function(branch) {
       if (['HEAD', 'master'].indexOf(branch) !== -1) {
         gitRev.tag(function(tag) {
