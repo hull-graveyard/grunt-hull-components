@@ -24,7 +24,7 @@ module.exports = function(grunt) {
     this.main         = mainFile;
     this.version      = options.version;
     this.sourcePath   = path.resolve(source);
-    this.name         = path.relative(source, path.dirname(mainFile));
+    this.name         = path.relative(source, path.dirname(mainFile)).replace('src/', '');
     this.basePath     = path.dirname(mainFile);
     this.destPath     = path.resolve(path.join(dest, this.name));
     this.options      = options;
@@ -56,6 +56,7 @@ module.exports = function(grunt) {
     files.forEach(function(file) {
       // Concat specified files.
       var dest = file.dest || 'dist',
+          componentSource = file.sourceName,
           components = [];
 
       file.src.forEach(function(source) {
@@ -72,7 +73,27 @@ module.exports = function(grunt) {
         Component.buildPreviews(source, dest, { components: componentsWithConfig, config: options.config, options: options });
       });
       _.invoke(components, 'build');
+
+      var sourceName = file.sourceName || file.dest;
+      var sourceDestFile = path.resolve(file.dest + ".js");
+      console.warn("Finished building: ", sourceDestFile, sourceName);
+      var sources = [], sourcePackage = {
+        source: sourceName,
+        components: {}
+      };
+
+      sources.push("(function(__component_source__) {");
+      _.each(components, function(component) {
+        sources.push(grunt.file.read(component.destPath + "/main.js"));
+        sourcePackage.components[component.name] = component.package();
+      });
+      sources.push("})('" + sourceName + "')");
+      grunt.file.write(path.resolve(file.dest + "/hull-components.js"),   sources.join(";"));
+      grunt.file.write(path.resolve(file.dest + "/hull-components.json"), JSON.stringify(sourcePackage, undefined, 2));
     });
+
+
+
   };
 
   Component.prototype = {
@@ -101,21 +122,30 @@ module.exports = function(grunt) {
       grunt.log.writeln(Array(title.length + 1).join('-'));
     },
 
-    buildPkgFile: function() {
-      var pkgFile = path.join(this.destPath, 'hull.json');
-      var pkg = _.extend(_.pick(this, 'name', 'version', 'files'), {
+    package: function() {
+      return _.extend(_.pick(this, 'name', 'version', 'files'), {
         buildDate: new Date()
       });
+    },
 
-      return grunt.file.write(pkgFile, JSON.stringify(pkg, null, 2));
+    buildPkgFile: function() {
+      var pkgFile = path.join(this.destPath, 'hull.json');
+      return grunt.file.write(pkgFile, JSON.stringify(this.package(), null, 2));
     },
 
     buildMainFile: function() {
       // Build source
       var source = [
+        "(function(Hull, __component_name__) {",
+        "var __component_fullname__ = __component_name__;",
+        "if (typeof(__component_source__) === 'string') { __component_fullname__ += '@' + __component_source__ };",
+        "var __prevHullComponent__ = Hull.component;",
+        "Hull.component = function(def) { __prevHullComponent__(__component_fullname__, def); };",
         this.buildTemplates(),
-        grunt.file.read(this.main)
-      ].join(" ; \n\n");
+        grunt.file.read(this.main),
+        "; Hull.component = __prevHullComponent__;",
+        "})(Hull, '" + this.name + "');"
+      ].join("\n");
 
       // Write results
       var mainDebugFile = this.destPath + '/main.debug.js';
@@ -155,8 +185,8 @@ module.exports = function(grunt) {
 
     buildTemplates: function() {
       var self = this, ns = this.options.templates.namespace, ext = this.options.templates.extension;
-      var compiled = [], parts = ["this"];
-
+      var compiled = [], parts = ["root"];
+      
       // Initialize namespace
       _.map(ns.split("."), function(part) {
         parts.push(part);
@@ -166,16 +196,22 @@ module.exports = function(grunt) {
 
       // Compile templates
       _.map(this.files.templates, function(tpl) {
-        var tplName = [self.name, tpl.replace(new RegExp('\.' + ext), '')].join("/");
+        var tplName = tpl.replace(new RegExp('\.' + ext + '$'), '');
         var srcPath   = path.resolve(path.join(self.basePath, tpl));
         var src = grunt.file.read(srcPath);
         var ast = Handlebars.parse(src);
         var ret = Handlebars.precompile(ast);
-        compiled.push(ns + '[' + JSON.stringify(tplName) + ']=' + ret);
+        compiled.push(ns + '[__component_name__ + "/' + tplName + '"]=' + ret);
       });
 
+      var templatesFile = this.destPath + '/templates.js';
+
+      var result = "(function(root, __component_name__) {" + compiled.join(";\n") + "})(this, '" + this.name + "');"
+
+      grunt.file.write(templatesFile, result);
+
       // Returned all templates as an Array
-      return compiled.join(";\n");
+      return result;
     }
   }
 
