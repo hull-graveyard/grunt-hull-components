@@ -13,6 +13,9 @@ var path        = require('path');
 var Handlebars  = require('handlebars');
 var UglifyJS    = require('uglify-js');
 var gitRev      = require('git-rev');
+var esprima     = require('esprima');
+var estraverse  = require('estraverse');
+var escodegen   = require('escodegen');
 
 Handlebars.registerHelper('json', function(obj) {
   return JSON.stringify(obj);
@@ -110,11 +113,41 @@ module.exports = function(grunt) {
       return grunt.file.write(pkgFile, JSON.stringify(pkg, null, 2));
     },
 
+    nameComponent: function () {
+      var componentCode = grunt.file.read(this.main);
+      var ast = esprima.parse(componentCode);
+      var self = this;
+      estraverse.traverse(ast, {
+        enter: function (node) {
+          if(node.type === 'ExpressionStatement') {
+            var expression = node.expression;
+            if (expression.type === 'CallExpression') {
+              var callee = expression.callee;
+              var object = callee.object;
+              var property = callee.property;
+              var args = expression.arguments;
+              if (object.name === 'Hull' && property.name === 'component') {
+                if (args.length === 1) {
+                  var generatedName = {
+                    type: 'Literal',
+                    value: self.name + '@hull'
+                  };
+                  args.unshift(generatedName);
+                }
+                return this.break();
+              }
+            }
+          }
+        }
+      });
+      return escodegen.generate(ast);
+    },
+
     buildMainFile: function() {
       // Build source
       var source = [
         this.buildTemplates(),
-        grunt.file.read(this.main)
+        this.nameComponent()
       ].join(" ; \n\n");
 
       // Write results
