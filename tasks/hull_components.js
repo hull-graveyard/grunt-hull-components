@@ -72,7 +72,7 @@ module.exports = function(grunt) {
           }
           return componentsWithConfig[c.name] = _.extend({}, c, { config: cfg });
         });
-        Component.buildPreviews(source, dest, { components: componentsWithConfig, config: options.config, options: options });
+        // Component.buildPreviews(source, dest, { components: componentsWithConfig, config: options.config, options: options });
       });
       _.invoke(components, 'build');
     });
