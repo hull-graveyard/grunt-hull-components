@@ -16,6 +16,8 @@ var gitRev      = require('git-rev');
 var esprima     = require('esprima');
 var estraverse  = require('estraverse');
 var escodegen   = require('escodegen');
+var bower       = require('bower');
+var path        = require('path');
 
 Handlebars.registerHelper('json', function(obj) {
   return JSON.stringify(obj);
@@ -259,4 +261,24 @@ module.exports = function(grunt) {
       }
     });
   });
+
+  grunt.registerTask('hull_auto_components', function () {
+    var dest = grunt.config('hull_auto_components.dest');
+    var bowerFiles = grunt.file.expand(bower.config.directory + '/*/bower.json');
+    var tasks = [];
+    _.each(bowerFiles, function (file) {
+      var contents = require(path.resolve(file));
+      if (contents.hull) {
+        var hullConfig = contents.hull;
+        var taskConfig = {
+          sourceName: hullConfig.sourceName,
+          src: path.resolve(file, '..', hullConfig.src || '.'),
+          dest: path.resolve([dest, hullConfig.sourceName].join('/'))
+        } ;
+        tasks.push('hull_components:' + hullConfig.sourceName);
+        grunt.config('hull_components.' + hullConfig.sourceName, taskConfig)
+      }
+    });
+    grunt.task.run(tasks);
+  })
 };
