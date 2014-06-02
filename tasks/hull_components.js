@@ -130,7 +130,7 @@ module.exports = function(grunt) {
                 if (args.length === 1) {
                   var generatedName = {
                     type: 'Literal',
-                    value: self.name + '@hull'
+                    value: self.name + '@' + self.options.sourceName
                   };
                   args.unshift(generatedName);
                 }
@@ -219,6 +219,7 @@ module.exports = function(grunt) {
 
     var options = this.options({
       optimize: true,
+      sourceName: 'default',
       templates: {
         extension: 'hbs',
         wrapped: false,
@@ -238,6 +239,7 @@ module.exports = function(grunt) {
     }
 
     var files = this.files;
+    options.sourceName = this.data.sourceName || options.sourceName;
 
     // Parse current version
     function buildAll(version) {
