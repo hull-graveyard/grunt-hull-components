@@ -32,7 +32,8 @@ module.exports = function(grunt) {
       templates: this.listFiles(this.options.templates.extension),
       stylesheets: this.listFiles(this.options.stylesheets.extension || 'css'),
       javascripts: this.listFiles('js')
-    }
+    };
+    this.compiledTemplates = {};
   };
 
   Component.list = function(source, dest, options) {
@@ -60,10 +61,27 @@ module.exports = function(grunt) {
     grunt.file.write(path.join(dest, 'ship.json'), JSON.stringify(ship, null, "  "));
   };
 
-  Component.buildSchema = function(source, dest) {
+  Component.buildSchema = function(dest, components) {
     var schemaFile = path.resolve('schema.yml');
     if (grunt.file.exists(schemaFile)) {
       var schema = grunt.file.readYAML(schemaFile);
+      var allTranslations = [];
+      _.map(components, function(component) {
+        allTranslations = allTranslations.concat(component.extractTranslations());
+      });
+      allTranslations = _.uniq(allTranslations).sort();
+      var props = {};
+      schema.definitions.translations = {
+        type: "object",
+        properties: props
+      };
+      _.map(allTranslations, function(str) {
+        props[str] = {
+          type: "string",
+          default: str,
+          title: str
+        };
+      });
       grunt.file.write(path.join(dest, 'schema.json'), JSON.stringify(schema, null, "  "));
     }
   };
@@ -89,7 +107,6 @@ module.exports = function(grunt) {
           });
         });
 
-        Component.buildSchema(source, dest);
 
         if (options.config.ship) {
           Component.buildShip(source, dest, options.config.ship);
@@ -102,6 +119,7 @@ module.exports = function(grunt) {
         });
       });
       _.invoke(components, 'build');
+      Component.buildSchema(dest, components);
     });
   };
 
@@ -139,7 +157,7 @@ module.exports = function(grunt) {
       var pkg = _.extend(_.pick(this, 'name', 'version', 'files'), {
         buildDate: new Date()
       });
-
+      pkg.translations = this.extractTranslations();
       return grunt.file.write(pkgFile, JSON.stringify(pkg, null, 2));
     },
 
@@ -186,10 +204,68 @@ module.exports = function(grunt) {
       });
     },
 
+    extractTranslations: function() {
+      var self = this;
+
+      if (this.translations) {
+        return this.translations;
+      }
+
+      function _extract_(root, depth) {
+        depth = depth || 0;
+        var translations = [];
+        var statements = root.statements || [];
+        if (root.inverse && root.inverse.statements) {
+          statements = statements.concat(root.inverse.statements);
+        }
+        if (statements && statements.length > 0) {
+          _.map(statements, function(leaf) {
+            if (leaf.type === 'mustache') {
+              if (leaf.id && leaf.id.string === 't') {
+                translations.push(leaf.params[0].string);
+              }
+            } else if (leaf.program) {
+              translations = translations.concat(_extract_(leaf.program, depth + 1));
+            }
+          });
+        }
+        return _.uniq(translations).sort();
+      };
+      var ast = {
+        statements: _.map(this.files.templates, function(tpl) {
+          return {
+            program: self.compileTemplate(tpl).ast
+          }
+        })
+      };
+
+      this.translations = _extract_(ast);
+
+      return this.translations;
+    },
+
+    compileTemplate: function(tpl) {
+      var tplPath = path.join(this.basePath, tpl);
+      if (this.compiledTemplates[tplPath]) {
+        return this.compiledTemplates[tplPath];
+      }
+      var srcPath = path.resolve(tplPath);
+      var src = grunt.file.read(srcPath);
+      var ast = Handlebars.parse(src);
+      var fn = Handlebars.precompile(ast);
+      this.compiledTemplates[tplPath] = {
+        ast: ast,
+        fn: fn
+      };
+      return this.compiledTemplates[tplPath];
+    },
+
     buildTemplates: function() {
       var self = this,
         ns = this.options.templates.namespace,
-        ext = this.options.templates.extension;
+        ext = this.options.templates.extension,
+        compiledTemplates = this.compiledTemplates;
+
       var compiled = [],
         parts = ["this"];
 
@@ -203,11 +279,8 @@ module.exports = function(grunt) {
       // Compile templates
       _.map(this.files.templates, function(tpl) {
         var tplName = [self.name, tpl.replace(new RegExp('\.' + ext), '')].join("/");
-        var srcPath = path.resolve(path.join(self.basePath, tpl));
-        var src = grunt.file.read(srcPath);
-        var ast = Handlebars.parse(src);
-        var ret = Handlebars.precompile(ast);
-        compiled.push(ns + '[' + JSON.stringify(tplName) + ']=' + ret);
+        var template = self.compileTemplate(tpl);
+        compiled.push(ns + '[' + JSON.stringify(tplName) + ']=' + template.fn);
       });
 
       // Returned all templates as an Array
