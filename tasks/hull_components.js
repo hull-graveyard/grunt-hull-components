@@ -8,11 +8,11 @@
 
 'use strict';
 
-var _           = require('lodash');
-var path        = require('path');
-var Handlebars  = require('handlebars');
-var UglifyJS    = require('uglify-js');
-var gitRev      = require('git-rev');
+var _ = require('lodash');
+var path = require('path');
+var Handlebars = require('handlebars');
+var UglifyJS = require('uglify-js');
+var gitRev = require('git-rev');
 
 Handlebars.registerHelper('json', function(obj) {
   return JSON.stringify(obj);
@@ -21,42 +21,59 @@ Handlebars.registerHelper('json', function(obj) {
 module.exports = function(grunt) {
 
   function Component(mainFile, source, dest, options) {
-    this.main         = mainFile;
-    this.version      = options.version;
-    this.sourcePath   = path.resolve(source);
-    this.name         = path.relative(source, path.dirname(mainFile));
-    this.basePath     = path.dirname(mainFile);
-    this.destPath     = path.resolve(path.join(dest, this.name));
-    this.options      = options;
-    this.files        = {
-      templates:    this.listFiles(this.options.templates.extension),
-      stylesheets:  this.listFiles(this.options.stylesheets.extension || 'css'),
-      javascripts:  this.listFiles('js')
+    this.main = mainFile;
+    this.version = options.version;
+    this.sourcePath = path.resolve(source);
+    this.name = path.relative(source, path.dirname(mainFile));
+    this.basePath = path.dirname(mainFile);
+    this.destPath = path.resolve(path.join(dest, this.name));
+    this.options = options;
+    this.files = {
+      templates: this.listFiles(this.options.templates.extension),
+      stylesheets: this.listFiles(this.options.stylesheets.extension || 'css'),
+      javascripts: this.listFiles('js')
     }
   };
 
   Component.list = function(source, dest, options) {
     var components = [];
-    grunt.file.expand({ filter: 'isFile' }, path.join(source, '/**/**/main.js')).forEach(function(main) {
-      components.push(new Component(main, source, dest, options))
+    grunt.file.expand({
+      filter: 'isFile'
+    }, path.join(source, '/**/**/main.js')).forEach(function(main) {
+      components.push(new Component(main, source, dest, options));
     });
     return components;
   };
 
   Component.buildPreviews = function(source, dest, data) {
-    grunt.file.expand({ filter: 'isFile', cwd: source }, '*.html').forEach(function(file) {
+    grunt.file.expand({
+      filter: 'isFile',
+      cwd: source
+    }, '*.html').forEach(function(file) {
       data.initConfig = JSON.stringify(data.config.init);
       var preview = Handlebars.compile(grunt.file.read(path.join(source, file)))(data);
       grunt.file.write(path.join(dest, file), preview);
     });
-  },
+  };
+
+  Component.buildShip = function(source, dest, ship) {
+    grunt.file.write(path.join(dest, 'ship.json'), JSON.stringify(ship, null, "  "));
+  };
+
+  Component.buildSchema = function(source, dest) {
+    var schemaFile = path.resolve('schema.yml');
+    if (grunt.file.exists(schemaFile)) {
+      var schema = grunt.file.readYAML(schemaFile);
+      grunt.file.write(path.join(dest, 'schema.json'), JSON.stringify(schema, null, "  "));
+    }
+  };
 
   Component.buildAll = function(files, options) {
 
     files.forEach(function(file) {
       // Concat specified files.
       var dest = file.dest || 'dist',
-          components = [];
+        components = [];
 
       file.src.forEach(function(source) {
         var list = Component.list(source, dest, options);
@@ -64,22 +81,38 @@ module.exports = function(grunt) {
         var componentsWithConfig = {};
         _.map(list, function(c) {
           var cfg = {};
-          if (options.config && options.config.components && options.config.components[c.name]) {
+          if (options.config.components && options.config.components[c.name]) {
             cfg = options.config.components[c.name];
           }
-          return componentsWithConfig[c.name] = _.extend({}, c, { config: cfg });
+          return componentsWithConfig[c.name] = _.extend({}, c, {
+            config: cfg
+          });
         });
-        Component.buildPreviews(source, dest, { components: componentsWithConfig, config: options.config, options: options });
+
+        Component.buildSchema(source, dest);
+
+        if (options.config.ship) {
+          Component.buildShip(source, dest, options.config.ship);
+        }
+
+        Component.buildPreviews(source, dest, {
+          components: componentsWithConfig,
+          config: options.config,
+          options: options
+        });
       });
       _.invoke(components, 'build');
     });
   };
 
   Component.prototype = {
-    listFiles: function(ext)  {
+    listFiles: function(ext) {
       var pattern = '**/**/*';
       if (ext) pattern += '.' + ext;
-      return grunt.file.expand({ filter: 'isFile', cwd: this.basePath }, pattern);
+      return grunt.file.expand({
+        filter: 'isFile',
+        cwd: this.basePath
+      }, pattern);
     },
 
     buildTasks: ['buildPkgFile', 'buildMainFile', 'buildJsVendors', 'buildCssVendors'],
@@ -135,7 +168,7 @@ module.exports = function(grunt) {
 
     buildJsVendors: function() {
       var destPath = this.destPath,
-          basePath = this.basePath;
+        basePath = this.basePath;
       _.each(this.files.javascripts, function(file) {
         if (file !== 'main.js') {
           var minified = UglifyJS.minify(path.join(basePath, file))
@@ -147,15 +180,18 @@ module.exports = function(grunt) {
 
     buildCssVendors: function() {
       var destPath = this.destPath,
-          basePath = this.basePath;
+        basePath = this.basePath;
       _.each(this.files.stylesheets, function(file) {
         grunt.file.write(path.join(destPath, file), grunt.file.read(path.join(basePath, file)));
       });
     },
 
     buildTemplates: function() {
-      var self = this, ns = this.options.templates.namespace, ext = this.options.templates.extension;
-      var compiled = [], parts = ["this"];
+      var self = this,
+        ns = this.options.templates.namespace,
+        ext = this.options.templates.extension;
+      var compiled = [],
+        parts = ["this"];
 
       // Initialize namespace
       _.map(ns.split("."), function(part) {
@@ -167,7 +203,7 @@ module.exports = function(grunt) {
       // Compile templates
       _.map(this.files.templates, function(tpl) {
         var tplName = [self.name, tpl.replace(new RegExp('\.' + ext), '')].join("/");
-        var srcPath   = path.resolve(path.join(self.basePath, tpl));
+        var srcPath = path.resolve(path.join(self.basePath, tpl));
         var src = grunt.file.read(srcPath);
         var ast = Handlebars.parse(src);
         var ret = Handlebars.precompile(ast);
