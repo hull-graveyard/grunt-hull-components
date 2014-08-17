@@ -38,7 +38,9 @@
     "uglify-js": "^2.4.0",
     "chalk": "^0.4.0",
     "git-rev": "~0.2.1",
-    "q" : "1.0.1"
+    "q" : "1.0.1",
+    "react-tools" : "0.11.1",
+    "ractive" : "0.5.5"
   },
   "keywords": [
     "gruntplugin"

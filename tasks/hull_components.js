@@ -40,7 +40,7 @@ module.exports = function(grunt) {
     var components = [];
     grunt.file.expand({
       filter: 'isFile'
-    }, path.join(source, '/**/**/main.js')).forEach(function(main) {
+    }, path.join(source, '/**/**/main.js*')).forEach(function(main) {
       components.push(new Component(main, source, dest, options));
     });
     return components;
@@ -57,7 +57,14 @@ module.exports = function(grunt) {
     });
   };
 
-  Component.buildShip = function(source, dest, ship) {
+  Component.buildShip = function(dest, ship, schema) {
+    _.map(ship.locales, function(translations, locale) {
+      translations = translations || {};
+      _.map(schema.definitions.translations.properties, function(tr, key) {
+        translations[key] = translations[key] || tr.default;
+      });
+      ship.locales[locale] = translations;
+    });
     grunt.file.write(path.join(dest, 'ship.json'), JSON.stringify(ship, null, "  "));
   };
 
@@ -83,6 +90,7 @@ module.exports = function(grunt) {
         };
       });
       grunt.file.write(path.join(dest, 'schema.json'), JSON.stringify(schema, null, "  "));
+      return schema;
     }
   };
 
@@ -107,19 +115,20 @@ module.exports = function(grunt) {
           });
         });
 
-
-        if (options.config.ship) {
-          Component.buildShip(source, dest, options.config.ship);
-        }
-
         Component.buildPreviews(source, dest, {
           components: componentsWithConfig,
           config: options.config,
           options: options
         });
       });
+
       _.invoke(components, 'build');
-      Component.buildSchema(dest, components);
+
+      var schema = Component.buildSchema(dest, components);
+
+      if (options.config.ship) {
+        Component.buildShip(dest, options.config.ship, schema);
+      }
     });
   };
 
@@ -162,11 +171,26 @@ module.exports = function(grunt) {
     },
 
     buildMainFile: function() {
+
+      var isJsx = /\.jsx$/.test(this.main), header;
+
+      if (isJsx) {
+        header = "/** @jsx React.DOM */\n";
+      } else {
+        header = this.buildTemplates();
+      }
+
       // Build source
       var source = [
-        this.buildTemplates(),
+        header,
         grunt.file.read(this.main)
       ].join(" ; \n\n");
+
+
+      if (isJsx) {
+        var react = require('react-tools');
+        source = react.transformWithDetails(source, { sourceMap: true, harmony: true, filename: 'main.source.js' }).code;
+      }
 
       // Write results
       var mainDebugFile = this.destPath + '/main.debug.js';
@@ -186,12 +210,17 @@ module.exports = function(grunt) {
 
     buildJsVendors: function() {
       var destPath = this.destPath,
-        basePath = this.basePath;
+        basePath = this.basePath,
+        optimize = this.options.optimize;
       _.each(this.files.javascripts, function(file) {
-        if (file !== 'main.js') {
-          var minified = UglifyJS.minify(path.join(basePath, file))
-          grunt.file.write(path.join(destPath, file), minified.code);
-          grunt.file.write(path.join(destPath, file) + '.map', minified.map);
+        if (file !== 'main.js' && file != 'main.jsx') {
+          if (optimize) {
+            var minified = UglifyJS.minify(path.join(basePath, file))
+            grunt.file.write(path.join(destPath, file), minified.code);
+            grunt.file.write(path.join(destPath, file) + '.map', minified.map);
+          } else {
+            grunt.file.copy(path.join(basePath, file), path.join(destPath, file));
+          }
         }
       });
     },
