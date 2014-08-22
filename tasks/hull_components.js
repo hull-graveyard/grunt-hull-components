@@ -101,8 +101,8 @@ module.exports = function(grunt) {
       var dest = file.dest || 'dist',
         components = [];
 
-      file.src.forEach(function(source) {
-        var list = Component.list(source, dest, options);
+      file.src.forEach(function(src) {
+        var list = Component.list(src + "/" + options.componentsDir, dest + "/" + options.componentsDir, options);
         components = components.concat(list);
         var componentsWithConfig = {};
         _.map(list, function(c) {
@@ -115,7 +115,7 @@ module.exports = function(grunt) {
           });
         });
 
-        Component.buildPreviews(source, dest, {
+        Component.buildPreviews(src, dest, {
           components: componentsWithConfig,
           config: options.config,
           options: options
