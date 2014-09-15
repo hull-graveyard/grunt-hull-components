@@ -40,7 +40,7 @@ module.exports = function(grunt) {
     var components = [];
     grunt.file.expand({
       filter: 'isFile'
-    }, path.join(source, '/**/**/main.js*')).forEach(function(main) {
+    }, path.join(source, '/**/**/main.js')).forEach(function(main) {
       components.push(new Component(main, source, dest, options));
     });
     return components;
@@ -57,42 +57,42 @@ module.exports = function(grunt) {
     });
   };
 
-  Component.buildShip = function(dest, ship, schema) {
-    _.map(ship.locales, function(translations, locale) {
-      translations = translations || {};
-      _.map(schema.definitions.translations.properties, function(tr, key) {
-        translations[key] = translations[key] || tr.default;
-      });
-      ship.locales[locale] = translations;
-    });
+  Component.buildShip = function(source, dest, ship) {
     grunt.file.write(path.join(dest, 'ship.json'), JSON.stringify(ship, null, "  "));
   };
 
-  Component.buildSchema = function(dest, components) {
-    var schemaFile = path.resolve('schema.yml');
-    if (grunt.file.exists(schemaFile)) {
-      var schema = grunt.file.readYAML(schemaFile);
-      var allTranslations = [];
+  Component.buildManifest = function(dest, components) {
+    var manifestFile = path.resolve('manifest.yml');
+
+    var previewImage = path.resolve('preview.png');
+    if (grunt.file.exists(previewImage)) {
+      grunt.file.copy(previewImage, path.join(dest, 'preview.png'));
+    }
+
+    var logoImage = path.resolve('logo.png');
+    if (grunt.file.exists(logoImage)) {
+      grunt.file.copy(logoImage, path.join(dest, 'logo.png'));
+    }
+
+    if (grunt.file.exists(manifestFile)) {
+      var schema = grunt.file.readYAML(manifestFile);
+      schema.definitions = schema.definitions || {};
+      var translations = {};
       _.map(components, function(component) {
-        allTranslations = allTranslations.concat(component.extractTranslations());
+        _.map(component.extractTranslations(), function(s) {
+          translations[s] = s;
+        })
       });
-      allTranslations = _.uniq(allTranslations).sort();
-      var props = {};
-      schema.definitions.translations = {
-        type: "object",
-        properties: props
-      };
-      _.map(allTranslations, function(str) {
-        props[str] = {
-          type: "string",
-          default: str,
-          title: str
-        };
-      });
-      grunt.file.write(path.join(dest, 'schema.json'), JSON.stringify(schema, null, "  "));
-      return schema;
+
+      if (Object.keys(translations).length > 0) {
+        grunt.file.write(path.join(dest, 'locales/en.json'), JSON.stringify(translations, null, "  "));
+      }
+
+      grunt.file.write(path.join(dest, 'manifest.json'), JSON.stringify(schema, null, "  "));
     }
   };
+
+
 
   Component.buildAll = function(files, options) {
 
@@ -101,8 +101,8 @@ module.exports = function(grunt) {
       var dest = file.dest || 'dist',
         components = [];
 
-      file.src.forEach(function(src) {
-        var list = Component.list(src + "/" + options.componentsDir, dest + "/" + options.componentsDir, options);
+      file.src.forEach(function(source) {
+        var list = Component.list(source, dest, options);
         components = components.concat(list);
         var componentsWithConfig = {};
         _.map(list, function(c) {
@@ -115,20 +115,19 @@ module.exports = function(grunt) {
           });
         });
 
-        Component.buildPreviews(src, dest, {
+
+        if (options.config.ship) {
+          Component.buildShip(source, dest, options.config.ship);
+        }
+
+        Component.buildPreviews(source, dest, {
           components: componentsWithConfig,
           config: options.config,
           options: options
         });
       });
-
       _.invoke(components, 'build');
-
-      var schema = Component.buildSchema(dest, components);
-
-      if (options.config.ship) {
-        Component.buildShip(dest, options.config.ship, schema);
-      }
+      Component.buildManifest(dest, components);
     });
   };
 
@@ -171,26 +170,11 @@ module.exports = function(grunt) {
     },
 
     buildMainFile: function() {
-
-      var isJsx = /\.jsx$/.test(this.main), header;
-
-      if (isJsx) {
-        header = "/** @jsx React.DOM */\n";
-      } else {
-        header = this.buildTemplates();
-      }
-
       // Build source
       var source = [
-        header,
+        this.buildTemplates(),
         grunt.file.read(this.main)
       ].join(" ; \n\n");
-
-
-      if (isJsx) {
-        var react = require('react-tools');
-        source = react.transformWithDetails(source, { sourceMap: true, harmony: true, filename: 'main.source.js' }).code;
-      }
 
       // Write results
       var mainDebugFile = this.destPath + '/main.debug.js';
@@ -210,17 +194,12 @@ module.exports = function(grunt) {
 
     buildJsVendors: function() {
       var destPath = this.destPath,
-        basePath = this.basePath,
-        optimize = this.options.optimize;
+        basePath = this.basePath;
       _.each(this.files.javascripts, function(file) {
-        if (file !== 'main.js' && file != 'main.jsx') {
-          if (optimize) {
-            var minified = UglifyJS.minify(path.join(basePath, file))
-            grunt.file.write(path.join(destPath, file), minified.code);
-            grunt.file.write(path.join(destPath, file) + '.map', minified.map);
-          } else {
-            grunt.file.copy(path.join(basePath, file), path.join(destPath, file));
-          }
+        if (file !== 'main.js') {
+          var minified = UglifyJS.minify(path.join(basePath, file))
+          grunt.file.write(path.join(destPath, file), minified.code);
+          grunt.file.write(path.join(destPath, file) + '.map', minified.map);
         }
       });
     },
