@@ -318,7 +318,7 @@ module.exports = function(grunt) {
     if (grunt.file.exists(this.data.dest) && !_.include(keepDests, this.data.dest)) {
       keepDests.push(this.data.dest);
       grunt.config.set('hull_components.options.keepDests', keepDests);
-      grunt.file.delete(this.data.dest);
+      grunt.file.delete(path.join(this.data.dest, grunt.config.get('hull_components.options.componentsDir')));
     }
 
     var files = this.files;
