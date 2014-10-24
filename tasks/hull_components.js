@@ -289,6 +289,10 @@ module.exports = function(grunt) {
       // Compile templates
       _.map(this.files.templates, function(tpl) {
         var tplName = [self.name, tpl.replace(new RegExp('\.' + ext), '')].join("/");
+        if (grunt.config.get('hull_components.options.componentsDir')) {
+          tplName = tplName.replace(new RegExp("^" + grunt.config.get('hull_components.options.componentsDir')), "");
+          tplName = tplName.replace(/^\//, '');
+        }
         var template = self.compileTemplate(tpl);
         compiled.push(ns + '[' + JSON.stringify(tplName) + ']=' + template.fn);
       });
