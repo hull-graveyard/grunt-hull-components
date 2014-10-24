@@ -52,7 +52,9 @@ module.exports = function(grunt) {
       cwd: source
     }, '*.html').forEach(function(file) {
       data.initConfig = JSON.stringify(data.config.init);
-      var preview = Handlebars.compile(grunt.file.read(path.join(source, file)))(data);
+      var src = grunt.file.read(path.join(source, file));
+      var preview = Handlebars.compile(src)(data);
+      grunt.file.write(path.join(dest, file.replace(/\.html$/, '.liquid.html')), src);
       grunt.file.write(path.join(dest, file), preview);
     });
   };
